@@ -1,0 +1,329 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Monitoramento Lavoura</title>
+    
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <style>
+        :root {
+            --bg-color: #121212;
+            --card-bg: #1e1e1e;
+            --text-main: #e0e0e0;
+            --text-muted: #a0a0a0;
+            
+            /* Cores Temáticas */
+            --color-water: #36a2eb;
+            --color-batt: #ffcd56;
+            
+            /* Cores de Sinal (RSSI) */
+            --sig-exc: #4caf50;  /* Verde Forte */
+            --sig-good: #8bc34a; /* Verde Claro */
+            --sig-fair: #ffeb3b; /* Amarelo */
+            --sig-weak: #ff9800; /* Laranja */
+            --sig-dead: #f44336; /* Vermelho */
+        }
+
+        body {
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            margin: 0;
+            padding: 20px;
+        }
+
+        /* --- HEADER --- */
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 25px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #333;
+        }
+        
+        .title-group h2 { margin: 0; font-weight: 300; letter-spacing: 1px; }
+        .chip-radio { 
+            display: inline-block;
+            font-size: 0.75rem; 
+            background: #2d2d2d; 
+            padding: 4px 10px; 
+            border-radius: 12px; 
+            color: var(--text-muted); 
+            border: 1px solid #444;
+            margin-top: 5px;
+        }
+
+        .status-badge {
+            text-align: right;
+            font-size: 0.8rem;
+            color: var(--text-muted);
+        }
+        .dot { height: 8px; width: 8px; background-color: #555; border-radius: 50%; display: inline-block; margin-right: 5px; }
+        .online { background-color: var(--sig-exc); box-shadow: 0 0 5px var(--sig-exc); }
+        .offline { background-color: var(--sig-dead); }
+
+        /* --- CARDS (GRID) --- */
+        .cards-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .card {
+            background-color: var(--card-bg);
+            padding: 20px;
+            border-radius: 12px;
+            text-align: center;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+
+        .card-title { font-size: 0.8rem; color: var(--text-muted); text-transform: uppercase; margin-bottom: 10px; letter-spacing: 0.5px; }
+        .card-value { font-size: 2.5rem; font-weight: bold; line-height: 1; }
+        .unit { font-size: 1rem; color: var(--text-muted); font-weight: normal; }
+        
+        /* Cores Específicas */
+        .val-water { color: var(--color-water); }
+        .val-batt { color: var(--color-batt); }
+
+        /* --- MONITOR DE SINAL (VISUAL) --- */
+        .signal-wrapper { margin-top: 10px; display: flex; flex-direction: column; align-items: center; }
+        
+        .signal-bars { 
+            display: flex; 
+            gap: 4px; 
+            align-items: flex-end; 
+            height: 20px; 
+            margin-bottom: 5px; 
+        }
+        
+        .bar { width: 6px; background: #333; border-radius: 2px; transition: all 0.3s; }
+        /* Alturas das barras */
+        .b1 { height: 6px; }
+        .b2 { height: 10px; }
+        .b3 { height: 15px; }
+        .b4 { height: 20px; }
+        
+        /* Estado Ativo (cor herdada do pai) */
+        .bar.active { background-color: currentColor; }
+
+        .signal-details { font-size: 0.8rem; color: var(--text-muted); margin-top: 5px; }
+        .packet-loss { font-size: 0.75rem; margin-top: 8px; padding-top: 5px; border-top: 1px solid #333; width: 100%; color: var(--text-muted); }
+        .loss-bad { color: var(--sig-dead); font-weight: bold; }
+
+        /* Classes de Cores Dinâmicas */
+        .signal-excellent { color: var(--sig-exc); }
+        .signal-good { color: var(--sig-good); }
+        .signal-fair { color: var(--sig-fair); }
+        .signal-weak { color: var(--sig-weak); }
+        .signal-dead { color: var(--sig-dead); }
+
+        /* --- GRÁFICOS --- */
+        .charts-wrapper {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 20px;
+        }
+        @media (min-width: 768px) {
+            .charts-wrapper { grid-template-columns: 1fr 1fr; }
+        }
+
+        .chart-box {
+            background-color: var(--card-bg);
+            padding: 15px;
+            border-radius: 12px;
+            height: 300px;
+            position: relative;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <div class="title-group">
+            <h2>Painel Lavoura</h2>
+            <span id="lblRadioModel" class="chip-radio">Detectando rádio...</span>
+        </div>
+        <div class="status-badge">
+            <span id="statusDot" class="dot"></span>
+            <span id="statusText">Conectando...</span>
+        </div>
+    </div>
+
+    <div class="cards-container">
+        
+        <div class="card">
+            <div class="card-title">Nível do Tanque</div>
+            <div class="card-value val-water">
+                <span id="lblLevel">--</span><span class="unit">cm</span>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-title">Bateria Remota</div>
+            <div class="card-value val-batt">
+                <span id="lblVolt">--</span><span class="unit">V</span>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-title">Qualidade de Rede</div>
+            
+            <div id="signalContainer" class="signal-wrapper signal-dead">
+                <div class="signal-bars">
+                    <div class="bar b1" id="bar1"></div>
+                    <div class="bar b2" id="bar2"></div>
+                    <div class="bar b3" id="bar3"></div>
+                    <div class="bar b4" id="bar4"></div>
+                </div>
+                
+                <div style="font-size: 1.5rem; font-weight: bold;">
+                    <span id="lblRssiPct">--</span><span class="unit">%</span>
+                </div>
+                
+                <div class="signal-details">
+                    <span id="lblRssiDbm">--</span> dBm • <span id="lblQual">--</span>
+                </div>
+
+                <div class="packet-loss">
+                    Perda de Pacotes: <span id="lblLoss">--</span>%
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="charts-wrapper">
+        <div class="chart-box">
+            <canvas id="chartLevel"></canvas>
+        </div>
+        <div class="chart-box">
+            <canvas id="chartVolt"></canvas>
+        </div>
+    </div>
+
+<script>
+    // --- 1. CONFIGURAÇÃO DOS GRÁFICOS (Chart.js) ---
+    Chart.defaults.color = '#a0a0a0';
+    Chart.defaults.borderColor = '#333';
+    
+    // Gradientes
+    const ctxL = document.getElementById('chartLevel').getContext('2d');
+    const gradL = ctxL.createLinearGradient(0, 0, 0, 300);
+    gradL.addColorStop(0, 'rgba(54, 162, 235, 0.4)');
+    gradL.addColorStop(1, 'rgba(54, 162, 235, 0.0)');
+
+    const ctxV = document.getElementById('chartVolt').getContext('2d');
+    const gradV = ctxV.createLinearGradient(0, 0, 0, 300);
+    gradV.addColorStop(0, 'rgba(255, 205, 86, 0.4)');
+    gradV.addColorStop(1, 'rgba(255, 205, 86, 0.0)');
+
+    const commonOpts = {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false }, title: { display: true, font:{size:14} } },
+        elements: { line: { tension: 0.4, borderWidth: 2 }, point: { radius: 0, hitRadius: 10 } },
+        scales: { x: { grid: { display: false }, ticks: { maxTicksLimit: 6 } }, y: { beginAtZero: true } }
+    };
+
+    const chartLevel = new Chart(ctxL, {
+        type: 'line',
+        data: { labels: [], datasets: [{ label: 'Nível (cm)', data: [], borderColor: '#36a2eb', backgroundColor: gradL, fill: true }] },
+        options: { ...commonOpts, plugins: { ...commonOpts.plugins, title: { display: true, text: 'Histórico de Nível' } } }
+    });
+
+    const chartVolt = new Chart(ctxV, {
+        type: 'line',
+        data: { labels: [], datasets: [{ label: 'Tensão (V)', data: [], borderColor: '#ffcd56', backgroundColor: gradV, fill: true }] },
+        options: { ...commonOpts, plugins: { ...commonOpts.plugins, title: { display: true, text: 'Histórico de Bateria' } } }
+    });
+
+
+    // --- 2. LÓGICA DE DADOS ---
+    const MAX_POINTS = 30; // Pontos no gráfico
+    const statusDot = document.getElementById('statusDot');
+    const statusText = document.getElementById('statusText');
+
+    async function fetchData(){
+        try {
+            const response = await fetch('/data');
+            
+            if (!response.ok) throw new Error("Falha HTTP");
+            
+            const j = await response.json();
+
+            // === STATUS GERAL ===
+            statusDot.className = "dot online";
+            statusText.innerText = "Online • " + new Date().toLocaleTimeString();
+            document.getElementById('lblRadioModel').innerText = j.radio_model || "LoRa Genérico";
+
+            // === CARDS DE VALOR ===
+            document.getElementById('lblLevel').innerText = parseFloat(j.level_cm).toFixed(1);
+            document.getElementById('lblVolt').innerText = parseFloat(j.voltage_V).toFixed(2);
+
+            // === LÓGICA DO SINAL (Complexa) ===
+            // Texto
+            document.getElementById('lblRssiPct').innerText = j.signal_pct;
+            document.getElementById('lblRssiDbm').innerText = j.rssi_dbm;
+            document.getElementById('lblQual').innerText = j.signal_qual;
+            
+            // Perda de Pacotes
+            const lossEl = document.getElementById('lblLoss');
+            lossEl.innerText = j.loss_pct;
+            // Se perda > 5%, pinta o texto de vermelho
+            lossEl.style.color = (j.loss_pct > 5.0) ? "var(--sig-dead)" : "var(--text-muted)";
+
+            // Cor Dinâmica do Card de Sinal
+            const sigContainer = document.getElementById('signalContainer');
+            // Remove classes antigas e adiciona a nova vinda do JSON (ex: "signal-good")
+            sigContainer.className = "signal-wrapper " + (j.signal_class || "signal-dead");
+
+            // Barras Visuais
+            const pct = parseInt(j.signal_pct);
+            document.getElementById('bar1').classList.toggle('active', pct > 10);
+            document.getElementById('bar2').classList.toggle('active', pct > 40);
+            document.getElementById('bar3').classList.toggle('active', pct > 70);
+            document.getElementById('bar4').classList.toggle('active', pct > 90);
+
+            // === ATUALIZAÇÃO DOS GRÁFICOS ===
+            const timeLabel = new Date().toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' });
+            
+            pushData(chartLevel, timeLabel, j.level_cm);
+            pushData(chartVolt, timeLabel, j.voltage_V);
+
+        } catch (e) {
+            console.error("Erro na leitura:", e);
+            statusDot.className = "dot offline";
+            statusText.innerText = "Offline / Tentando...";
+            // Opcional: Esvaziar valores ou manter o último
+        }
+    }
+
+    function pushData(chart, label, value) {
+        const labels = chart.data.labels;
+        const data = chart.data.datasets[0].data;
+
+        labels.push(label);
+        data.push(value);
+
+        if (labels.length > MAX_POINTS) {
+            labels.shift();
+            data.shift();
+        }
+        chart.update('none'); // 'none' para animação suave sem piscar
+    }
+
+    // Loop de atualização a cada 3 segundos
+    setInterval(fetchData, 3000);
+    
+    // Primeira chamada imediata
+    fetchData();
+
+</script>
+</body>
+</html>

@@ -1,0 +1,55 @@
+{
+	"folders": [
+		{
+			"name": "EX_01",
+			"path": "../../../EX_01"
+		},
+		{
+			"name": "EX_02",
+			"path": "../../../EX_02"
+		},
+		{
+			"name": "EX_4",
+			"path": "../../../EX_4"
+		},
+		{
+			"name": "SensorDeNivel_V0",
+			"path": ".."
+		},
+		{
+			"name": "EX_05",
+			"path": "../../../EX_05"
+		},
+		{
+			"name": "EX_06_FILAS",
+			"path": "../../../EX_06_FILAS"
+		},
+		{
+			"name": "EX_07",
+			"path": "../../../EX_07"
+		},
+		{
+			"name": "EX_08_Semaforos",
+			"path": "../../../EX_08_Semaforos"
+		},
+		{
+			"name": "EX_09_SEMAFORO_BIN",
+			"path": "../../../EX_09_SEMAFORO_BIN"
+		},
+		{
+			"name": "EX_10_SEMAFORO_COUNT",
+			"path": "../../../EX_10_SEMAFORO_COUNT"
+		},
+		{
+			"name": "EX_11_SEMAFORO_MUTEX",
+			"path": "../../../EX_11_SEMAFORO_MUTEX"
+		},
+		{
+			"name": "EX_12_SOFT_TIMER",
+			"path": "../../../EX_12_SOFT_TIMER"
+		}
+	],
+	"settings": {
+		"liveServer.settings.multiRootWorkspaceName": "SensorDeNivel_V0"
+	}
+}
