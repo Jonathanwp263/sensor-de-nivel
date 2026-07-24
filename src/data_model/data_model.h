@@ -26,3 +26,4 @@ typedef struct {
 // ==========================================
 extern SensorData sensorData;
 extern NetworkStats netStats;
+extern SemaphoreHandle_t sensorMutex;

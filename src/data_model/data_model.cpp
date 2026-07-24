@@ -15,3 +15,6 @@ NetworkStats netStats = {
     .rssi_volta = 0,
     .rssi_ida = 0
 };
+
+// Mutex criado em initLoRaMesh(), após o scheduler FreeRTOS estar ativo
+SemaphoreHandle_t sensorMutex = NULL;

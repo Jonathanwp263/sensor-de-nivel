@@ -77,17 +77,19 @@ MeshStatus_Typedef LocalRemoteRead(uint16_t idIn, uint16_t* idOut, uint16_t* net
     PrepareFrameCommand(0, CMD_LOCALREAD, &bufferPayload[0], i);
   }
   else return MESH_ERROR;
-  
+
+  /* Flush serial input buffer (limpa lixo/resposta atrasada de uma
+     transação anterior ANTES de enviar, para não misturar com a
+     resposta desta chamada) */
+  SerialFlush(hSerialCommand);
+
   /* Sends packet */
   SendPacket();
-  
-  /* Flush serial input buffer */
-  SerialFlush(hSerialCommand);
 
   /* Waits for response */
   if( ReceivePacketCommand(&id, &command, &bufferPayload[0], &payloadSize, 5000) != MESH_OK)
     return MESH_ERROR;
-  
+
   /* Checks command */
   if((command != CMD_REMOTEREAD) && (command != CMD_LOCALREAD))
     return MESH_ERROR;
@@ -117,13 +119,16 @@ MeshStatus_Typedef LocalRemoteRead(uint16_t idIn, uint16_t* idOut, uint16_t* net
 HardwareSerial* SerialCommandsInit(uint8_t rxPin, uint8_t txPin, uint32_t baudRate, uint8_t uart)
 {
   /* filter not used baudrates */
-  
+
   static HardwareSerial radioSerialCommands(uart);
   radioSerialCommands.begin(baudRate, SERIAL_8N1, rxPin, txPin);
   hSerialCommand = &radioSerialCommands;
 
-  /* Run local read */
-  LocalRead(&deviceId, &deviceNet, &deviceUniqueId);
+  /* NOTA: NÃO disparar um LocalRead aqui. O módulo pode ainda estar
+     inicializando logo após o Serial.begin(), então este comando
+     tende a nunca ser respondido e só consome até 5s do boot à toa.
+     O chamador é responsável por dar tempo de estabilização e então
+     fazer o LocalRead explicitamente. */
 
   return &radioSerialCommands;
 }
@@ -396,23 +401,23 @@ MeshStatus_Typedef GpioConfig(uint16_t id, GPIO_Typedef pin, Mode_Typedef mode, 
   
   /* Prepares frame for transmission */
   PrepareFrameCommand(id, CMD_GPIOCONFIG, &bufferPayload[0], i);
-  
+
+  /* Flush serial input buffer (antes de enviar, não depois) */
+  SerialFlush(hSerialCommand);
+
   /* Sends frame */
   SendPacket();
 
-  /* Flush serial input buffer */
-  SerialFlush(hSerialCommand);
-  
   if( ReceivePacketCommand(&id, &command, &bufferPayload[0], &payloadSize, 10000) != MESH_OK)
     return MESH_ERROR;
-  
+
   /* Checks command */
   if(command != CMD_GPIOCONFIG)
     return MESH_ERROR;
 
   /* Checks error bit */
   if(bufferPayload[1] != 0) return MESH_ERROR;
-  
+
   return MESH_OK;
 }
 
@@ -441,24 +446,24 @@ MeshStatus_Typedef GpioWrite(uint16_t id, GPIO_Typedef pin, uint8_t value)
 
   /* Prepares frame for transmission */
   PrepareFrameCommand(id, CMD_GPIOCONFIG, &bufferPayload[0], i);
-  
+
+  /* Flush serial input buffer (antes de enviar, não depois) */
+  SerialFlush(hSerialCommand);
+
   /* Sends frame */
   SendPacket();
 
-  /* Flush serial input buffer */
-  SerialFlush(hSerialCommand);
-  
   /* Waits for response */
   if( ReceivePacketCommand(&id, &command, &bufferPayload[0], &payloadSize, 5000) != MESH_OK)
     return MESH_ERROR;
-  
+
   /* Checks command */
   if(command != CMD_GPIOCONFIG)
     return MESH_ERROR;
-  
+
   /* Checks error bit */
   if(bufferPayload[1] != 0) return MESH_ERROR;
-  
+
   return MESH_OK;
 }
 
@@ -488,21 +493,21 @@ MeshStatus_Typedef GpioRead(uint16_t id, GPIO_Typedef pin, uint16_t* value)
   
   /* Prepares frame for transmission */
   PrepareFrameCommand(id, CMD_GPIOCONFIG, &bufferPayload[0], i);
-  
+
+  /* Flush serial input buffer (antes de enviar, não depois) */
+  SerialFlush(hSerialCommand);
+
   /* Sends packet */
   SendPacket();
-  
-  /* Flush serial input buffer */
-  SerialFlush(hSerialCommand);
 
   /* Waits for response */
   if( ReceivePacketCommand(&id, &command, &bufferPayload[0], &payloadSize, 5000) != MESH_OK)
     return MESH_ERROR;
-  
+
   /* Checks command */
   if(command != CMD_GPIOCONFIG)
     return MESH_ERROR;
-  
+
   /* Checks the error bit */
   if(bufferPayload[1] != 0) return MESH_ERROR;
   

@@ -52,25 +52,32 @@ void initWebServer() {
 
     // --- ROTA DE DADOS (JSON) ---
     server.on("/data", HTTP_GET, [](AsyncWebServerRequest *request){
-        
-        // 1. Traduz o RSSI (netStats vem do data_model.h)
-        SignalQuality sig = calculateSignalQuality(netStats.rssi_volta);
+
+        // Snapshot atômico — evita leitura parcial entre ciclos da loraTask
+        xSemaphoreTake(sensorMutex, portMAX_DELAY);
+        float nivel   = sensorData.nivel_cm;
+        float bateria = sensorData.bateria_V;
+        int rssiVolta = netStats.rssi_volta;
+        float loss    = netStats.packet_loss_pct;
+        xSemaphoreGive(sensorMutex);
+
+        SignalQuality sig = calculateSignalQuality(rssiVolta);
 
         JSONVar response;
-        
+
         // Dados do Sensor (Nomes das chaves devem bater com o HTML/JS)
-        response["level_cm"]  = sensorData.nivel_cm;
-        response["voltage_V"] = sensorData.bateria_V;
-        
+        response["level_cm"]  = nivel;
+        response["voltage_V"] = bateria;
+
         // Dados de Sinal & Rede
         response["rssi_dbm"]     = sig.rssi_dbm;
         response["signal_pct"]   = sig.percentage;
         response["signal_qual"]  = sig.status;
-        response["signal_class"] = sig.cssClass; // Ex: "signal-good"
-        
+        response["signal_class"] = sig.cssClass;
+
         // Estatísticas
-        response["loss_pct"]     = String(netStats.packet_loss_pct, 2);
-        
+        response["loss_pct"]     = String(loss, 2);
+
         // Info Estática
         response["radio_model"]  = "Radioenge LoRaMESH";
 
@@ -96,8 +103,11 @@ void handleUpload(AsyncWebServerRequest *request, String filename, size_t index,
         Serial.printf("[Upload] Recebendo: %s\n", filename.c_str());
 
         // 1. PAUSA O LORA (CRÍTICO PARA NÃO TRAVAR A SPI)
-        if (xLoraTaskHandle != NULL) {
-            vTaskSuspend(xLoraTaskHandle);
+        if (xLoraLevelTaskHandle != NULL) {
+            vTaskSuspend(xLoraLevelTaskHandle);
+        }
+        if (xLoraDiagTaskHandle != NULL) {
+            vTaskSuspend(xLoraDiagTaskHandle);
         }
 
         // Força salvar como /index.html se for a página principal
@@ -121,9 +131,12 @@ void handleUpload(AsyncWebServerRequest *request, String filename, size_t index,
         Serial.printf("[Upload] Concluido: %u bytes\n", index + len);
 
         // 2. RETOMA O LORA
-        if (xLoraTaskHandle != NULL) {
-            vTaskResume(xLoraTaskHandle);
-            Serial.println("[System] LoRa retomado.");
+        if (xLoraLevelTaskHandle != NULL) {
+            vTaskResume(xLoraLevelTaskHandle);
         }
+        if (xLoraDiagTaskHandle != NULL) {
+            vTaskResume(xLoraDiagTaskHandle);
+        }
+        Serial.println("[System] LoRa retomado.");
     }
 }
